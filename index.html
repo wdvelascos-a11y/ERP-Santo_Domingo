@@ -88,6 +88,16 @@
   .toast.show{opacity:1;transform:none}
   .filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;font-size:12.5px}
   .filterbar select,.filterbar input{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px}
+  .modo{font-size:12px;font-weight:600;padding:6px 10px;border-radius:7px;background:#f1f5f9;color:var(--muted)}
+  table.data input:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}
+  .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;align-items:center;justify-content:center}
+  .modalbox{background:#fff;border-radius:14px;padding:24px;width:340px;max-width:92vw;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+  .modalbox h3{margin:0 0 6px;font-size:17px}
+  .modalbox .mhint{margin:0 0 16px;font-size:12px;color:var(--muted);line-height:1.5}
+  .modalbox label{display:block;font-size:12px;font-weight:600;margin:10px 0 4px;color:var(--ink)}
+  .modalbox input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+  .merr{color:var(--crit);font-size:12px;margin-top:10px;min-height:14px}
+  .mbtns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 </style>
 </head>
 <body>
@@ -109,8 +119,10 @@
     <input type="file" id="imp" accept=".xlsx,.xls" style="display:none" onchange="importarExcel(event)">
     <button class="btn ok" onclick="exportarExcel()">⬇️ Descargar Excel</button>
     <button class="btn" onclick="window.print()">🖨️ Imprimir / PDF</button>
+    <span id="modoEdic" class="modo">👁️ Solo lectura</span>
     <div class="spacer"></div>
     <button class="btn" onclick="restaurar()" title="Recarga desde Supabase si está conectado; si no, restaura los datos originales">↺ Recargar datos</button>
+    <button class="btn" id="authBtn" onclick="abrirLogin()" title="Iniciar sesión para editar">🔑 Iniciar sesión</button>
   </div>
 
   <div class="kpis" id="kpis"></div>
@@ -176,6 +188,22 @@
 
 <div class="toast" id="toast"></div>
 
+<div id="loginModal" class="modal">
+  <form class="modalbox" onsubmit="enviarLogin(event)">
+    <h3>🔑 Iniciar sesión</h3>
+    <p class="mhint">Solo el responsable autorizado puede editar. El resto ve el tablero en modo lectura.</p>
+    <label>Correo</label>
+    <input type="email" id="liEmail" autocomplete="username" placeholder="tucorreo@dominio.com">
+    <label>Contraseña</label>
+    <input type="password" id="liPass" autocomplete="current-password" placeholder="••••••••">
+    <div id="liErr" class="merr"></div>
+    <div class="mbtns">
+      <button type="button" class="btn" onclick="cerrarLogin()">Cancelar</button>
+      <button type="submit" class="btn primary">Entrar</button>
+    </div>
+  </form>
+</div>
+
 <script>
 /* ============================================================
    CONFIGURACIÓN DE SUPABASE  (piloto)
@@ -192,11 +220,17 @@ const SB_ON = SUPABASE_URL.trim()!=="" && SUPABASE_ANON_KEY.trim()!=="";
 const SB_TABLE = "cronograma";
 // Normaliza la URL: quita "/" final y un "/rest/v1" si lo pegaron de más
 const SB_BASE = SUPABASE_URL.trim().replace(/\/+$/,"").replace(/\/rest\/v1$/,"");
+// ===== Sesión de usuario (Supabase Auth) =====
+let session = null;            // {access_token, refresh_token, email, expires_at}
+function isLoggedIn(){ return !!(session && session.access_token); }
+function authToken(){
+  if(isLoggedIn()) return session.access_token;                          // token del usuario (rol authenticated)
+  return SUPABASE_ANON_KEY.trim().startsWith("eyJ") ? SUPABASE_ANON_KEY : null; // anon JWT para lectura pública
+}
 function sbHeaders(extra){
   const h={"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"};
-  // La clave anon legacy es un JWT (empieza con "eyJ") y va también como Bearer.
-  // Las claves nuevas (sb_publishable_...) NO son JWT: solo van como apikey.
-  if(SUPABASE_ANON_KEY.trim().startsWith("eyJ")) h["Authorization"]="Bearer "+SUPABASE_ANON_KEY;
+  const t=authToken();
+  if(t) h["Authorization"]="Bearer "+t;
   return Object.assign(h, extra||{});
 }
 
@@ -393,6 +427,7 @@ function renderTabla(acts){
   const t=document.getElementById("tabla");
   let html=`<tr><th>#</th><th>Actividad / Tipo</th><th>Responsable</th><th>Inicio</th><th>Fin</th><th>Dur.</th>
     <th>% Ejec.</th><th>% Esp.</th><th>Estado</th><th>Observaciones</th></tr>`;
+  const ed = isLoggedIn() ? "" : "disabled";
   let lastFase="", visN=0;
   acts.forEach(a=>{
     if(ff && a.fase!==ff) return;
@@ -408,11 +443,11 @@ function renderTabla(acts){
       <td class="mini">${fmt(c.ini)}</td>
       <td class="mini">${fmt(c.fin)}</td>
       <td class="mini" style="text-align:center">${a.duracion||""}</td>
-      <td><input type="number" min="0" max="100" step="5" value="${Math.round(c.real)}" onchange="setPct(${a._i},this.value)">
+      <td><input type="number" min="0" max="100" step="5" value="${Math.round(c.real)}" onchange="setPct(${a._i},this.value)" ${ed}>
           <div class="rowbar"><i style="width:${c.real}%"></i></div></td>
       <td class="mini" style="text-align:center">${c.esperado}%</td>
       <td><span class="pill ${ESTILO[c.estado]}">${c.estado}</span>${c.alerta?'<div class="mini" style="color:var(--crit)">-'+c.alerta.desvio+' pts</div>':''}</td>
-      <td><input type="text" value="${(a.obs||'').replace(/"/g,'&quot;')}" onchange="setObs(${a._i},this.value)" placeholder="Agregar observación…"></td>
+      <td><input type="text" value="${(a.obs||'').replace(/"/g,'&quot;')}" onchange="setObs(${a._i},this.value)" placeholder="${ed?'Solo lectura':'Agregar observación…'}" ${ed}></td>
     </tr>`;
   });
   if(visN===0) html+=`<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">Sin actividades para el filtro seleccionado.</td></tr>`;
@@ -426,12 +461,15 @@ function setObs(i,v){ DATA.actividades[i].obs=v; sbSave(i,{obs:v},"Observación"
 /* ===== guardado en Supabase ===== */
 async function sbSave(i,fields,etiqueta){
   if(!SB_ON){ showToast(etiqueta+" actualizada (modo local)"); return; }
+  if(!isLoggedIn()){ showToast("Inicia sesión para guardar cambios"); abrirLogin(); return; }
   const id=DATA.actividades[i]._id;
   if(id==null){ showToast("Sin id de fila; recarga la página"); return; }
+  const body=Object.assign({},fields,{updated_at:new Date().toISOString()});
+  const enviar=()=>fetch(`${SB_BASE}/rest/v1/${SB_TABLE}?id=eq.${id}`,{
+    method:"PATCH",headers:sbHeaders({"Prefer":"return=minimal"}),body:JSON.stringify(body)});
   try{
-    const body=Object.assign({},fields,{updated_at:new Date().toISOString()});
-    const r=await fetch(`${SB_BASE}/rest/v1/${SB_TABLE}?id=eq.${id}`,{
-      method:"PATCH",headers:sbHeaders({"Prefer":"return=minimal"}),body:JSON.stringify(body)});
+    let r=await enviar();
+    if(r.status===401){ if(await sbRefresh()){ r=await enviar(); } else { actualizarAuthUI(); render(); throw new Error("sesión expirada, vuelve a iniciar sesión"); } }
     if(!r.ok) throw new Error("HTTP "+r.status+": "+(await r.text()));
     showToast(etiqueta+" guardada ✓");
   }catch(e){ console.error(e); setBadge("err","⛔ Error al guardar"); showToast("Error al guardar: "+e.message); }
@@ -448,12 +486,76 @@ async function cargarDesdeSupabase(){
     duracion:x.duracion||0, inicio:x.inicio, fin:x.fin, pct:Number(x.pct)||0, obs:x.obs||""}))};
 }
 
+/* ===== Autenticación (Supabase Auth, vía REST) ===== */
+function guardarSesion(){ try{ localStorage.setItem("sb_session", JSON.stringify(session)); }catch(e){} }
+function cargarSesion(){
+  try{ const s=JSON.parse(localStorage.getItem("sb_session")||"null");
+    if(s && s.access_token) session=s; }catch(e){ session=null; }
+}
+function sbLogoutLocal(){ session=null; try{ localStorage.removeItem("sb_session"); }catch(e){} }
+
+async function sbLogin(email,password){
+  const r=await fetch(`${SB_BASE}/auth/v1/token?grant_type=password`,{
+    method:"POST", headers:{"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({email,password})});
+  const j=await r.json();
+  if(!r.ok) throw new Error(j.error_description||j.msg||j.message||("HTTP "+r.status));
+  session={access_token:j.access_token, refresh_token:j.refresh_token,
+    email:(j.user&&j.user.email)||email, expires_at:Date.now()+((j.expires_in||3600)*1000)};
+  guardarSesion();
+}
+async function sbRefresh(){
+  if(!session||!session.refresh_token) return false;
+  try{
+    const r=await fetch(`${SB_BASE}/auth/v1/token?grant_type=refresh_token`,{
+      method:"POST", headers:{"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({refresh_token:session.refresh_token})});
+    if(!r.ok){ sbLogoutLocal(); return false; }
+    const j=await r.json();
+    session={...session, access_token:j.access_token, refresh_token:j.refresh_token,
+      expires_at:Date.now()+((j.expires_in||3600)*1000)};
+    guardarSesion(); return true;
+  }catch(e){ return false; }
+}
+async function sbLogout(){
+  try{ await fetch(`${SB_BASE}/auth/v1/logout`,{method:"POST",headers:sbHeaders()}); }catch(e){}
+  sbLogoutLocal(); actualizarAuthUI(); render(); showToast("Sesión cerrada");
+}
+
+function actualizarAuthUI(){
+  const b=document.getElementById("authBtn");
+  if(!b) return;
+  if(isLoggedIn()){ b.textContent="🔓 "+session.email+" · Cerrar sesión"; b.onclick=sbLogout; b.title="Cerrar sesión"; }
+  else{ b.textContent="🔑 Iniciar sesión"; b.onclick=abrirLogin; b.title="Iniciar sesión para editar"; }
+  const modo=document.getElementById("modoEdic");
+  if(modo) modo.textContent = isLoggedIn() ? "✏️ Edición habilitada" : "👁️ Solo lectura";
+}
+function abrirLogin(){ document.getElementById("loginModal").style.display="flex"; document.getElementById("liEmail").focus(); }
+function cerrarLogin(){ document.getElementById("loginModal").style.display="none"; document.getElementById("liErr").textContent=""; }
+async function enviarLogin(ev){
+  if(ev) ev.preventDefault();
+  const em=document.getElementById("liEmail").value.trim();
+  const pw=document.getElementById("liPass").value;
+  const err=document.getElementById("liErr"); err.textContent="";
+  if(!em||!pw){ err.textContent="Ingresa correo y contraseña."; return; }
+  try{
+    await sbLogin(em,pw);
+    cerrarLogin(); document.getElementById("liPass").value="";
+    actualizarAuthUI();
+    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); }catch(e){}
+    render(); showToast("Sesión iniciada ✓");
+  }catch(e){ err.textContent="No se pudo iniciar sesión: "+e.message; }
+}
+
 async function init(){
+  cargarSesion();
+  if(session && session.expires_at && session.expires_at < Date.now()+60000){ await sbRefresh(); }
   if(SB_ON){
     setBadge("","⏳ Conectando…");
     try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); }
     catch(e){ console.error(e); setBadge("err","🔴 Sin conexión (modo local)"); showToast("Supabase: "+e.message); }
   }
+  actualizarAuthUI();
   render();
 }
 
