@@ -90,7 +90,30 @@
   .filterbar select,.filterbar input{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12.5px}
   .modo{font-size:12px;font-weight:600;padding:6px 10px;border-radius:7px;background:#f1f5f9;color:var(--muted)}
   table.data input:disabled{background:#f8fafc;color:#94a3b8;cursor:not-allowed}
-  .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;align-items:center;justify-content:center}
+  .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:400;align-items:center;justify-content:center}
+  /* Pantalla de inicio */
+  #landing{position:fixed;inset:0;z-index:300;background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+  #landing .lwrap{max-width:780px;animation:fadein .5s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  #landing .ltag{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.82;margin-bottom:16px}
+  #landing h1{font-size:clamp(19px,3vw,30px);line-height:1.32;margin:0 0 12px;font-weight:800}
+  #landing .lsub{font-size:14px;opacity:.9;margin-bottom:36px}
+  #landing .lopts{display:flex;gap:20px;flex-wrap:wrap;justify-content:center}
+  #landing .lcard{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.28);border-radius:16px;padding:28px 26px;width:258px;cursor:pointer;transition:.18s}
+  #landing .lcard:hover{background:rgba(255,255,255,.18);transform:translateY(-4px);box-shadow:0 14px 30px rgba(0,0,0,.25)}
+  #landing .lcard .ic{font-size:32px}
+  #landing .lcard .t{font-size:16px;font-weight:700;margin:12px 0 7px}
+  #landing .lcard .d{font-size:12px;opacity:.86;line-height:1.55}
+  #landing .lcard .lcount{margin-top:12px;font-size:11.5px;font-weight:700;background:rgba(255,255,255,.16);display:inline-block;padding:3px 11px;border-radius:999px}
+  #landing .lseclabel{font-size:12px;font-weight:700;letter-spacing:.04em;opacity:.9;margin-bottom:14px;text-transform:uppercase}
+  #landing .ldiv{display:flex;align-items:center;gap:12px;margin:26px auto 18px;max-width:320px;opacity:.6}
+  #landing .ldiv:before,#landing .ldiv:after{content:"";flex:1;height:1px;background:rgba(255,255,255,.4)}
+  #landing .ldiv span{font-size:12px}
+  #landing .btn-edit{background:#fff;color:var(--brand);border:none;padding:11px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:.16s}
+  #landing .btn-edit:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.25)}
+  #landing .lfoot{margin-top:26px;font-size:11.5px;opacity:.72}
+  .projpick{font-size:12.5px;font-weight:600;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+  .projpick select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;font-weight:600;max-width:260px}
   .modalbox{background:#fff;border-radius:14px;padding:24px;width:340px;max-width:92vw;box-shadow:0 20px 50px rgba(0,0,0,.3)}
   .modalbox h3{margin:0 0 6px;font-size:17px}
   .modalbox .mhint{margin:0 0 16px;font-size:12px;color:var(--muted);line-height:1.5}
@@ -101,6 +124,21 @@
 </style>
 </head>
 <body>
+<div id="landing">
+  <div class="lwrap">
+    <div class="ltag">Origami · Tablero de Seguimiento</div>
+    <h1>Seguimiento de proyectos</h1>
+    <div class="lsub">Selecciona un proyecto para visualizarlo, o ingresa para editar su información.</div>
+    <div class="lseclabel">👁️ Visualizar proyecto</div>
+    <div class="lopts" id="projCards">
+      <div class="lcard" style="opacity:.7;cursor:default">Cargando proyectos…</div>
+    </div>
+    <div class="ldiv"><span>o</span></div>
+    <button class="btn-edit" onclick="entrarEditar()">✏️ Editar información</button>
+    <div class="lfoot" id="lfoot">Cargando datos…</div>
+  </div>
+</div>
+
 <header class="top">
   <h1 id="pTitle">—</h1>
   <div class="sub" id="pContr">—</div>
@@ -115,6 +153,10 @@
 
 <div class="wrap">
   <div class="toolbar">
+    <button class="btn" onclick="volverInicio()" title="Volver a la pantalla de inicio">🏠 Inicio</button>
+    <label class="projpick">Proyecto:
+      <select id="projSel" onchange="setProyecto(this.value)"></select>
+    </label>
     <button class="btn primary" onclick="document.getElementById('imp').click()">⬆️ Cargar Excel</button>
     <input type="file" id="imp" accept=".xlsx,.xls" style="display:none" onchange="importarExcel(event)">
     <button class="btn ok" onclick="exportarExcel()">⬇️ Descargar Excel</button>
@@ -278,6 +320,19 @@ const DATA_ORIG = {
 let DATA = JSON.parse(JSON.stringify(DATA_ORIG));
 let donutChart = null;
 const TOL = 10;
+
+/* ===== Estado multi-proyecto ===== */
+let PROYECTOS = [];        // [{id,codigo,nombre,contratante,fecha_contrato,fecha_inicio,fecha_fin,orden}]
+let ALL_ACTS  = [];        // todas las actividades de todos los proyectos (filas de cronograma)
+let proyectoActual = null; // id del proyecto seleccionado
+
+// Construye PROYECTOS y ALL_ACTS desde los datos embebidos (modo local / sin conexión)
+function fallbackLocal(){
+  PROYECTOS=[{id:1, codigo:"ERP - GAD Santo Domingo", nombre:DATA_ORIG.meta.proyecto,
+    contratante:DATA_ORIG.meta.contratante, fecha_contrato:DATA_ORIG.meta.fecha_contrato,
+    fecha_inicio:DATA_ORIG.meta.fecha_inicio, fecha_fin:DATA_ORIG.meta.fecha_fin, orden:1}];
+  ALL_ACTS=DATA_ORIG.actividades.map((a,i)=>({...a, id:i+1, proyecto_id:1, orden:i+1}));
+}
 
 function pd(s){ if(!s) return null; const p=String(s).split("-"); return new Date(+p[0],+p[1]-1,+p[2]); }
 function fmt(d){ if(!d) return "—"; return d.toLocaleDateString("es-EC",{day:"2-digit",month:"short",year:"numeric"}); }
@@ -477,13 +532,52 @@ async function sbSave(i,fields,etiqueta){
 
 /* ===== carga inicial desde Supabase ===== */
 async function cargarDesdeSupabase(){
-  const r=await fetch(`${SB_BASE}/rest/v1/${SB_TABLE}?select=*&order=orden.asc`,{headers:sbHeaders()});
-  if(!r.ok) throw new Error("HTTP "+r.status+": "+(await r.text()));
-  const rows=await r.json();
-  if(!rows.length) throw new Error("La tabla está vacía. Ejecuta supabase_setup.sql.");
-  DATA={meta:DATA_ORIG.meta, actividades: rows.map(x=>({
-    _id:x.id, fase:x.fase||"", actividad:x.actividad||"", tipo:x.tipo||"", personal:x.personal||"",
-    duracion:x.duracion||0, inicio:x.inicio, fin:x.fin, pct:Number(x.pct)||0, obs:x.obs||""}))};
+  // Proyectos
+  let r=await fetch(`${SB_BASE}/rest/v1/proyectos?select=*&activo=eq.true&order=orden.asc`,{headers:sbHeaders()});
+  if(!r.ok) throw new Error("HTTP "+r.status+" (proyectos): "+(await r.text()));
+  PROYECTOS=await r.json();
+  if(!PROYECTOS.length) throw new Error("No hay proyectos. Ejecuta supabase_multiproyecto.sql.");
+  // Cronograma (todas las actividades de todos los proyectos)
+  r=await fetch(`${SB_BASE}/rest/v1/${SB_TABLE}?select=*&order=proyecto_id.asc,orden.asc`,{headers:sbHeaders()});
+  if(!r.ok) throw new Error("HTTP "+r.status+" (cronograma): "+(await r.text()));
+  ALL_ACTS=await r.json();
+}
+
+// Arma DATA (meta + actividades) para el proyecto indicado y refresca el tablero
+function setProyecto(id){
+  const p=PROYECTOS.find(x=>String(x.id)===String(id))||PROYECTOS[0];
+  if(!p) return;
+  proyectoActual=p.id;
+  const acts=ALL_ACTS.filter(a=>String(a.proyecto_id)===String(p.id))
+    .slice().sort((a,b)=>(a.orden||0)-(b.orden||0))
+    .map(x=>({_id:x.id, proyecto_id:x.proyecto_id, fase:x.fase||"", actividad:x.actividad||"",
+      tipo:x.tipo||"", personal:x.personal||"", duracion:x.duracion||0,
+      inicio:x.inicio, fin:x.fin, pct:Number(x.pct)||0, obs:x.obs||""}));
+  DATA={meta:{proyecto:p.nombre, contratante:p.contratante, fecha_contrato:p.fecha_contrato,
+    fecha_inicio:p.fecha_inicio, fecha_fin:p.fecha_fin}, actividades:acts};
+  const sel=document.getElementById("projSel"); if(sel) sel.value=p.id;
+  document.getElementById("fFase").innerHTML='<option value="">Todas</option>';
+  document.getElementById("fEstado").value=""; document.getElementById("fTxt").value="";
+  render();
+}
+
+// Portada: tarjetas por proyecto + combo de selección
+function renderLanding(){
+  const cont=document.getElementById("projCards");
+  if(cont){
+    if(!PROYECTOS.length){ cont.innerHTML='<div class="lcard" style="cursor:default">Sin proyectos disponibles</div>'; }
+    else cont.innerHTML=PROYECTOS.map(p=>{
+      const n=ALL_ACTS.filter(a=>String(a.proyecto_id)===String(p.id)).length;
+      return `<div class="lcard" onclick="entrarVisualizar(${p.id})" title="Visualizar ${(p.codigo||'').replace(/"/g,'')}">
+        <div class="ic">📊</div>
+        <div class="t">${p.codigo||p.nombre||"Proyecto"}</div>
+        <div class="d">${p.nombre||""}</div>
+        <div class="lcount">${n} actividades</div>
+      </div>`;
+    }).join("");
+  }
+  const sel=document.getElementById("projSel");
+  if(sel) sel.innerHTML=PROYECTOS.map(p=>`<option value="${p.id}">${p.codigo||p.nombre||("Proyecto "+p.id)}</option>`).join("");
 }
 
 /* ===== Autenticación (Supabase Auth, vía REST) ===== */
@@ -519,7 +613,7 @@ async function sbRefresh(){
 }
 async function sbLogout(){
   try{ await fetch(`${SB_BASE}/auth/v1/logout`,{method:"POST",headers:sbHeaders()}); }catch(e){}
-  sbLogoutLocal(); actualizarAuthUI(); render(); showToast("Sesión cerrada");
+  sbLogoutLocal(); actualizarAuthUI(); render(); volverInicio(); showToast("Sesión cerrada");
 }
 
 function actualizarAuthUI(){
@@ -532,6 +626,14 @@ function actualizarAuthUI(){
 }
 function abrirLogin(){ document.getElementById("loginModal").style.display="flex"; document.getElementById("liEmail").focus(); }
 function cerrarLogin(){ document.getElementById("loginModal").style.display="none"; document.getElementById("liErr").textContent=""; }
+
+/* ===== Pantalla de inicio (portada) ===== */
+function entrarVisualizar(id){ if(id!=null) setProyecto(id); document.getElementById("landing").style.display="none"; }
+function entrarEditar(){
+  if(isLoggedIn()){ document.getElementById("landing").style.display="none"; showToast("Selecciona el proyecto a editar en el combo superior"); }
+  else{ abrirLogin(); }   // al iniciar sesión correctamente, la portada se oculta sola
+}
+function volverInicio(){ renderLanding(); document.getElementById("landing").style.display="flex"; }
 async function enviarLogin(ev){
   if(ev) ev.preventDefault();
   const em=document.getElementById("liEmail").value.trim();
@@ -542,21 +644,29 @@ async function enviarLogin(ev){
     await sbLogin(em,pw);
     cerrarLogin(); document.getElementById("liPass").value="";
     actualizarAuthUI();
-    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); }catch(e){}
-    render(); showToast("Sesión iniciada ✓");
+    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); renderLanding(); }catch(e){}
+    setProyecto(proyectoActual||(PROYECTOS[0]&&PROYECTOS[0].id)||1);
+    document.getElementById("landing").style.display="none";   // entra al tablero en modo edición
+    showToast("Sesión iniciada ✓ · elige el proyecto en el combo");
   }catch(e){ err.textContent="No se pudo iniciar sesión: "+e.message; }
 }
 
 async function init(){
   cargarSesion();
   if(session && session.expires_at && session.expires_at < Date.now()+60000){ await sbRefresh(); }
+  let estado = SB_ON ? "Conectado a la base de datos" : "Modo local (sin base de datos)";
   if(SB_ON){
     setBadge("","⏳ Conectando…");
     try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); }
-    catch(e){ console.error(e); setBadge("err","🔴 Sin conexión (modo local)"); showToast("Supabase: "+e.message); }
+    catch(e){ console.error(e); setBadge("err","🔴 Sin conexión (modo local)"); showToast("Supabase: "+e.message); estado="Sin conexión a la base · usando datos locales"; fallbackLocal(); }
+  }else{
+    fallbackLocal();
   }
+  renderLanding();
+  setProyecto((PROYECTOS[0]&&PROYECTOS[0].id) || 1);   // deja un proyecto cargado bajo la portada
   actualizarAuthUI();
-  render();
+  const lf=document.getElementById("lfoot");
+  if(lf) lf.textContent = PROYECTOS.length + " proyecto(s) · " + estado + (isLoggedIn()? " · sesión activa: "+session.email : "");
 }
 
 /* ===== Excel: importar ===== */
@@ -633,13 +743,11 @@ function exportarExcel(){
 }
 
 async function restaurar(){
-  document.getElementById("fFase").innerHTML='<option value="">Todas</option>';
-  document.getElementById("fEstado").value=""; document.getElementById("fTxt").value="";
   if(SB_ON){
-    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); render(); showToast("Datos recargados desde Supabase"); }
-    catch(e){ showToast("Error al recargar desde Supabase"); }
+    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); renderLanding(); setProyecto(proyectoActual||(PROYECTOS[0]&&PROYECTOS[0].id)||1); showToast("Datos recargados desde Supabase"); }
+    catch(e){ showToast("Error al recargar: "+e.message); }
   }else{
-    DATA=JSON.parse(JSON.stringify(DATA_ORIG)); render(); showToast("Datos originales restaurados");
+    fallbackLocal(); renderLanding(); setProyecto(proyectoActual||1); showToast("Datos locales restaurados");
   }
 }
 
