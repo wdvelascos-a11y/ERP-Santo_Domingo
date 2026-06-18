@@ -190,7 +190,15 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const SB_ON = SUPABASE_URL.trim()!=="" && SUPABASE_ANON_KEY.trim()!=="";
 const SB_TABLE = "cronograma";
-function sbHeaders(extra){ return Object.assign({"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"}, extra||{}); }
+// Normaliza la URL: quita "/" final y un "/rest/v1" si lo pegaron de más
+const SB_BASE = SUPABASE_URL.trim().replace(/\/+$/,"").replace(/\/rest\/v1$/,"");
+function sbHeaders(extra){
+  const h={"apikey":SUPABASE_ANON_KEY,"Content-Type":"application/json"};
+  // La clave anon legacy es un JWT (empieza con "eyJ") y va también como Bearer.
+  // Las claves nuevas (sb_publishable_...) NO son JWT: solo van como apikey.
+  if(SUPABASE_ANON_KEY.trim().startsWith("eyJ")) h["Authorization"]="Bearer "+SUPABASE_ANON_KEY;
+  return Object.assign(h, extra||{});
+}
 
 /* ====== DATOS EMBEBIDOS (extraídos del Excel original) ====== */
 const DATA_ORIG = {
@@ -422,17 +430,17 @@ async function sbSave(i,fields,etiqueta){
   if(id==null){ showToast("Sin id de fila; recarga la página"); return; }
   try{
     const body=Object.assign({},fields,{updated_at:new Date().toISOString()});
-    const r=await fetch(`${SUPABASE_URL}/rest/v1/${SB_TABLE}?id=eq.${id}`,{
+    const r=await fetch(`${SB_BASE}/rest/v1/${SB_TABLE}?id=eq.${id}`,{
       method:"PATCH",headers:sbHeaders({"Prefer":"return=minimal"}),body:JSON.stringify(body)});
-    if(!r.ok) throw new Error(await r.text());
+    if(!r.ok) throw new Error("HTTP "+r.status+": "+(await r.text()));
     showToast(etiqueta+" guardada ✓");
-  }catch(e){ console.error(e); setBadge("err","⛔ Error al guardar"); showToast("Error al guardar en Supabase"); }
+  }catch(e){ console.error(e); setBadge("err","⛔ Error al guardar"); showToast("Error al guardar: "+e.message); }
 }
 
 /* ===== carga inicial desde Supabase ===== */
 async function cargarDesdeSupabase(){
-  const r=await fetch(`${SUPABASE_URL}/rest/v1/${SB_TABLE}?select=*&order=orden.asc`,{headers:sbHeaders()});
-  if(!r.ok) throw new Error(await r.text());
+  const r=await fetch(`${SB_BASE}/rest/v1/${SB_TABLE}?select=*&order=orden.asc`,{headers:sbHeaders()});
+  if(!r.ok) throw new Error("HTTP "+r.status+": "+(await r.text()));
   const rows=await r.json();
   if(!rows.length) throw new Error("La tabla está vacía. Ejecuta supabase_setup.sql.");
   DATA={meta:DATA_ORIG.meta, actividades: rows.map(x=>({
@@ -444,7 +452,7 @@ async function init(){
   if(SB_ON){
     setBadge("","⏳ Conectando…");
     try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); }
-    catch(e){ console.error(e); setBadge("err","🔴 Sin conexión (modo local)"); showToast("No se pudo conectar a Supabase; uso datos locales"); }
+    catch(e){ console.error(e); setBadge("err","🔴 Sin conexión (modo local)"); showToast("Supabase: "+e.message); }
   }
   render();
 }
