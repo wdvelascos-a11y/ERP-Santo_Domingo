@@ -18,8 +18,11 @@
   header.top{background:linear-gradient(135deg,#0f172a,#1d4ed8);color:#fff;padding:22px 26px}
   header.top h1{margin:0 0 4px;font-size:18px;font-weight:700;line-height:1.3}
   header.top .sub{font-size:12.5px;opacity:.9}
-  header.top .meta{margin-top:10px;display:flex;flex-wrap:wrap;gap:18px;font-size:12px;opacity:.92}
+  header.top .meta{margin-top:10px;display:flex;flex-wrap:wrap;gap:18px;font-size:12px;opacity:.92;align-items:center}
   header.top .meta b{font-weight:600}
+  .conn{padding:2px 10px;border-radius:999px;font-weight:600;font-size:11px;background:rgba(255,255,255,.18)}
+  .conn.on{background:#16a34a;color:#fff}
+  .conn.err{background:#dc2626;color:#fff}
   .wrap{max-width:1280px;margin:0 auto;padding:18px 22px 60px}
   .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0}
   .btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;gap:7px;align-items:center;transition:.15s}
@@ -43,7 +46,6 @@
   .pill.crit{background:#fee2e2;color:#b91c1c}
   .pill.idle{background:#f1f5f9;color:#64748b}
   .pill.warn{background:#fef3c7;color:#b45309}
-  /* phase progress */
   .phase-row{margin-bottom:14px}
   .phase-head{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
   .phase-head .nm{font-weight:600;color:var(--ink)}
@@ -53,7 +55,6 @@
   .legend{font-size:11px;color:var(--muted);margin-top:8px;display:flex;gap:16px;flex-wrap:wrap}
   .legend span{display:inline-flex;align-items:center;gap:5px}
   .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
-  /* alerts */
   .alert{display:flex;gap:10px;padding:11px 12px;border-radius:9px;margin-bottom:9px;border:1px solid var(--line);align-items:flex-start}
   .alert.crit{background:#fef2f2;border-color:#fecaca}
   .alert.warn{background:#fffbeb;border-color:#fde68a}
@@ -62,7 +63,6 @@
   .alert .txt b{display:block;margin-bottom:2px}
   .alert .txt small{color:var(--muted)}
   .noalert{color:var(--ok);font-size:13px;padding:10px;display:flex;gap:8px;align-items:center}
-  /* gantt */
   .gantt{overflow-x:auto}
   .gantt table{border-collapse:collapse;width:100%;min-width:760px}
   .gantt td,.gantt th{padding:3px 6px;font-size:11px}
@@ -72,7 +72,6 @@
   .gtoday{position:absolute;top:-2px;height:calc(100% + 4px);width:2px;background:var(--crit);z-index:5}
   .gmonths{position:relative;height:18px;color:var(--muted)}
   .gmonths span{position:absolute;font-size:9.5px;transform:translateX(-50%)}
-  /* table */
   .tablewrap{overflow-x:auto}
   table.data{border-collapse:collapse;width:100%;min-width:1050px;font-size:12.5px}
   table.data th{background:#0f172a;color:#fff;padding:9px 8px;text-align:left;font-weight:600;font-size:11.5px;position:sticky;top:0}
@@ -100,6 +99,7 @@
     <span>🚀 <b>Inicio:</b> <span id="pFI">—</span></span>
     <span>🏁 <b>Fin:</b> <span id="pFF">—</span></span>
     <span>📅 <b>Fecha de corte:</b> <span id="pHoy">—</span></span>
+    <span id="connBadge" class="conn">⚪ Modo local</span>
   </div>
 </header>
 
@@ -107,16 +107,14 @@
   <div class="toolbar">
     <button class="btn primary" onclick="document.getElementById('imp').click()">⬆️ Cargar Excel</button>
     <input type="file" id="imp" accept=".xlsx,.xls" style="display:none" onchange="importarExcel(event)">
-    <button class="btn ok" onclick="exportarExcel()">⬇️ Descargar Excel actualizado</button>
+    <button class="btn ok" onclick="exportarExcel()">⬇️ Descargar Excel</button>
     <button class="btn" onclick="window.print()">🖨️ Imprimir / PDF</button>
     <div class="spacer"></div>
-    <button class="btn" onclick="restaurar()">↺ Restaurar datos originales</button>
+    <button class="btn" onclick="restaurar()" title="Recarga desde Supabase si está conectado; si no, restaura los datos originales">↺ Recargar datos</button>
   </div>
 
-  <!-- KPIs -->
   <div class="kpis" id="kpis"></div>
 
-  <!-- Alertas + Dona -->
   <div class="grid2">
     <div class="card">
       <h2 class="sec">🚨 Alertas de cumplimiento del cronograma</h2>
@@ -128,7 +126,6 @@
     </div>
   </div>
 
-  <!-- Avance por fase + Gantt -->
   <div class="grid2b">
     <div class="card">
       <h2 class="sec">📈 Avance por fase <span style="font-weight:400;color:var(--muted);font-size:12px">(real vs. esperado)</span></h2>
@@ -151,7 +148,6 @@
     </div>
   </div>
 
-  <!-- Tabla editable -->
   <div class="card" style="margin-top:16px">
     <h2 class="sec">📝 Cronograma — reportar ejecución y observaciones</h2>
     <div class="filterbar">
@@ -171,10 +167,9 @@
       <table class="data" id="tabla"></table>
     </div>
     <div class="footnote">
-      Edita el <b>% de ejecución</b> (0–100) y las <b>observaciones</b> directamente en la tabla; los indicadores, alertas y gráficos se actualizan al instante.
+      Edita el <b>% de ejecución</b> (0–100) y las <b>observaciones</b> directamente en la tabla. Si Supabase está conectado, cada cambio se guarda automáticamente en la base de datos; si no, los cambios son locales y se respaldan con <b>Descargar Excel</b>.
       El <b>% esperado</b> se calcula de forma lineal según los días transcurridos entre la fecha de inicio y fin planificadas y la fecha de corte.
       Una actividad se marca <b>Retrasada</b> si su fecha fin planificada ya pasó y no está al 100%, o si su avance real está &gt;10 puntos por debajo del esperado.
-      Cuando termines, usa <b>Descargar Excel actualizado</b> para guardar tu reporte.
     </div>
   </div>
 </div>
@@ -182,6 +177,21 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* ============================================================
+   CONFIGURACIÓN DE SUPABASE  (piloto)
+   Pega aquí los dos valores de tu proyecto:
+   Supabase -> Project Settings -> API
+   - SUPABASE_URL      : ej. https://abcdxyz.supabase.co
+   - SUPABASE_ANON_KEY : la clave "anon public"
+   Si los dejas vacíos, el dashboard funciona en modo local (Excel).
+============================================================ */
+const SUPABASE_URL = "https://azebldwnorjaanttvnqp.supabase.co/rest/v1/";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF6ZWJsZHdub3JqYWFudHR2bnFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTY1MzcsImV4cCI6MjA5NzM3MjUzN30.KqhHR17tfgYWL3XBtB6gBiqX7MtF22aL--f5ZtUkCgk";
+
+const SB_ON = SUPABASE_URL.trim()!=="" && SUPABASE_ANON_KEY.trim()!=="";
+const SB_TABLE = "cronograma";
+function sbHeaders(extra){ return Object.assign({"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"}, extra||{}); }
+
 /* ====== DATOS EMBEBIDOS (extraídos del Excel original) ====== */
 const DATA_ORIG = {
  "meta":{"proyecto":"CONSULTORÍA DE IMPLEMENTACIÓN DE UNA SOLUCIÓN INFORMÁTICA INTEGRAL DE GESTIÓN ADMINISTRATIVA, FINANCIERA Y TRIBUTARIA","contratante":"GAD Municipal Santo Domingo","fecha_contrato":"2025-08-13","fecha_inicio":"2025-09-02","fecha_fin":"2027-02-24"},
@@ -220,20 +230,18 @@ const DATA_ORIG = {
 {"fase":"FASE VI: Instalación de productos","actividad":"Puesta en producción","tipo":"Tarea","personal":"Analista de procesos, Analista de Sistemas, Arquitecto de Software, Programador Junior y Programados Senior","duracion":30,"inicio":"2027-01-13","fin":"2027-02-12","pct":0,"obs":"Programado"},
 {"fase":"FASE VI: Instalación de productos","actividad":"Elaboración del Informe de puesta en producción de la solución informática","tipo":"Tarea","personal":"Analista de Sistemas y Arquitecto de Software","duracion":9,"inicio":"2027-02-12","fin":"2027-02-21","pct":0,"obs":"Programado"},
 {"fase":"FASE VI: Instalación de productos","actividad":"Elaboración del Informe de atención de incidentes durante el periodo de estabilización de la aplicación","tipo":"Tarea","personal":"Analista de Sistemas y Arquitecto de Software","duracion":11,"inicio":"2027-02-12","fin":"2027-02-23","pct":0,"obs":"Programado"},
-{"fase":"FASE VI: Instalación de productos","actividad":"Entrega de productos de la Fase VI (2 informes)","tipo":"Producto","personal":"Director de Proyecto","duracion":1,"inicio":"2027-02-24","fin":"2027-02-24","pct":0,"obs":""}
+{"fase":"FASE VI: Instalación de productos","actividad":"Entrega de productos de la Fase VI (2 informes)","tipo":"","personal":"Director de Proyecto","duracion":1,"inicio":"2027-02-24","fin":"2027-02-24","pct":0,"obs":""}
 ]};
 
 let DATA = JSON.parse(JSON.stringify(DATA_ORIG));
 let donutChart = null;
-const TOL = 10; // puntos de tolerancia para marcar retraso
+const TOL = 10;
 
-/* ===== utilidades de fecha ===== */
-function pd(s){ if(!s) return null; const p=s.split("-"); return new Date(+p[0],+p[1]-1,+p[2]); }
+function pd(s){ if(!s) return null; const p=String(s).split("-"); return new Date(+p[0],+p[1]-1,+p[2]); }
 function fmt(d){ if(!d) return "—"; return d.toLocaleDateString("es-EC",{day:"2-digit",month:"short",year:"numeric"}); }
 function hoy(){ const n=new Date(); return new Date(n.getFullYear(),n.getMonth(),n.getDate()); }
 function diasEntre(a,b){ return Math.round((b-a)/86400000); }
 
-/* ===== cálculo por actividad ===== */
 function calc(a){
   const ini=pd(a.inicio), fin=pd(a.fin), h=hoy();
   const real=Math.max(0,Math.min(100,(a.pct||0)*100));
@@ -247,7 +255,6 @@ function calc(a){
   else if(ini&&h<ini) estado="Por iniciar";
   else if(fin&&h>fin) estado="Retrasada";
   else estado="En curso";
-  // retraso por desvío aunque siga dentro de plazo
   let alerta=null;
   const desvio=esperado-real;
   if(estado==="Retrasada"){ alerta={sev:"crit",desvio:Math.round(desvio)}; }
@@ -258,8 +265,8 @@ function calc(a){
 const ESTILO={"Completado":"ok","En curso":"prog","Retrasada":"crit","Por iniciar":"idle"};
 
 function showToast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+function setBadge(cls,txt){ const b=document.getElementById("connBadge"); b.className="conn "+(cls||""); b.textContent=txt; }
 
-/* ===== render principal ===== */
 function render(){
   const m=DATA.meta;
   document.getElementById("pTitle").textContent=m.proyecto;
@@ -271,7 +278,6 @@ function render(){
 
   const acts=DATA.actividades.map((a,i)=>({...a,_i:i,_c:calc(a)}));
 
-  /* ---- KPIs ---- */
   const totDur=acts.reduce((s,a)=>s+(a.duracion||0),0);
   const realPond=acts.reduce((s,a)=>s+a._c.real*(a.duracion||0),0)/Math.max(1,totDur);
   const espPond=acts.reduce((s,a)=>s+a._c.esperado*(a.duracion||0),0)/Math.max(1,totDur);
@@ -293,7 +299,6 @@ function render(){
     kpi("Tiempo transcurrido",pctTiempo+"%",transc+" de "+totDias+" días")
   ].join("");
 
-  /* ---- Alertas ---- */
   const al=acts.filter(a=>a._c.alerta).sort((x,y)=>y._c.alerta.desvio-x._c.alerta.desvio);
   const ab=document.getElementById("alerts");
   if(al.length===0){
@@ -310,7 +315,6 @@ function render(){
     }).join("");
   }
 
-  /* ---- Avance por fase ---- */
   const fases=[]; const fmap={};
   acts.forEach(a=>{ if(!fmap[a.fase]){fmap[a.fase]={dur:0,real:0,esp:0,n:0,done:0}; fases.push(a.fase);}
     const f=fmap[a.fase]; const w=a.duracion||0; f.dur+=w; f.real+=a._c.real*w; f.esp+=a._c.esperado*w; f.n++; if(a._c.estado==="Completado")f.done++; });
@@ -322,13 +326,8 @@ function render(){
     </div>`;
   }).join("");
 
-  /* ---- Gantt ---- */
   renderGantt(acts,ini,fin,h);
-
-  /* ---- Dona ---- */
   renderDonut(acts);
-
-  /* ---- Tabla ---- */
   renderTabla(acts);
 }
 
@@ -354,7 +353,6 @@ function renderGantt(acts,ini,fin,h){
   const total=diasEntre(ini,fin);
   const pos=d=>Math.max(0,Math.min(100,diasEntre(ini,d)/total*100));
   const colors={"Completado":"#16a34a","En curso":"#2563eb","Retrasada":"#dc2626","Por iniciar":"#94a3b8"};
-  // meses
   let months="";
   let cur=new Date(ini.getFullYear(),ini.getMonth(),1);
   while(cur<=fin){
@@ -377,7 +375,6 @@ function renderGantt(acts,ini,fin,h){
 }
 
 function renderTabla(acts){
-  // poblar filtro de fases una sola vez
   const selF=document.getElementById("fFase");
   if(selF.options.length<=1){
     [...new Set(DATA.actividades.map(a=>a.fase))].forEach(f=>{
@@ -415,8 +412,42 @@ function renderTabla(acts){
 }
 
 /* ===== edición ===== */
-function setPct(i,v){ let n=parseFloat(v); if(isNaN(n))n=0; n=Math.max(0,Math.min(100,n)); DATA.actividades[i].pct=n/100; render(); showToast("Avance actualizado"); }
-function setObs(i,v){ DATA.actividades[i].obs=v; showToast("Observación guardada"); }
+function setPct(i,v){ let n=parseFloat(v); if(isNaN(n))n=0; n=Math.max(0,Math.min(100,n)); DATA.actividades[i].pct=n/100; render(); sbSave(i,{pct:n/100},"Avance"); }
+function setObs(i,v){ DATA.actividades[i].obs=v; sbSave(i,{obs:v},"Observación"); }
+
+/* ===== guardado en Supabase ===== */
+async function sbSave(i,fields,etiqueta){
+  if(!SB_ON){ showToast(etiqueta+" actualizada (modo local)"); return; }
+  const id=DATA.actividades[i]._id;
+  if(id==null){ showToast("Sin id de fila; recarga la página"); return; }
+  try{
+    const body=Object.assign({},fields,{updated_at:new Date().toISOString()});
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/${SB_TABLE}?id=eq.${id}`,{
+      method:"PATCH",headers:sbHeaders({"Prefer":"return=minimal"}),body:JSON.stringify(body)});
+    if(!r.ok) throw new Error(await r.text());
+    showToast(etiqueta+" guardada ✓");
+  }catch(e){ console.error(e); setBadge("err","⛔ Error al guardar"); showToast("Error al guardar en Supabase"); }
+}
+
+/* ===== carga inicial desde Supabase ===== */
+async function cargarDesdeSupabase(){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${SB_TABLE}?select=*&order=orden.asc`,{headers:sbHeaders()});
+  if(!r.ok) throw new Error(await r.text());
+  const rows=await r.json();
+  if(!rows.length) throw new Error("La tabla está vacía. Ejecuta supabase_setup.sql.");
+  DATA={meta:DATA_ORIG.meta, actividades: rows.map(x=>({
+    _id:x.id, fase:x.fase||"", actividad:x.actividad||"", tipo:x.tipo||"", personal:x.personal||"",
+    duracion:x.duracion||0, inicio:x.inicio, fin:x.fin, pct:Number(x.pct)||0, obs:x.obs||""}))};
+}
+
+async function init(){
+  if(SB_ON){
+    setBadge("","⏳ Conectando…");
+    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); }
+    catch(e){ console.error(e); setBadge("err","🔴 Sin conexión (modo local)"); showToast("No se pudo conectar a Supabase; uso datos locales"); }
+  }
+  render();
+}
 
 /* ===== Excel: importar ===== */
 function importarExcel(ev){
@@ -427,10 +458,8 @@ function importarExcel(ev){
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:"yyyy-mm-dd"});
-      // localizar fila de encabezado de la tabla (col0 == "Fase")
       let hr=rows.findIndex(r=>r&&String(r[0]).trim().toLowerCase()==="fase");
       if(hr<0){ showToast("No se encontró la tabla (columna 'Fase')"); return; }
-      // meta
       const meta={...DATA.meta};
       rows.slice(0,hr).forEach(r=>{
         const k=String(r[0]||"").toLowerCase();
@@ -450,9 +479,8 @@ function importarExcel(ev){
       });
       if(acts.length===0){ showToast("No se leyeron actividades del archivo"); return; }
       DATA={meta,actividades:acts};
-      // reset filtro de fases
-      const selF=document.getElementById("fFase"); selF.innerHTML='<option value="">Todas</option>';
-      render(); showToast("Excel cargado: "+acts.length+" actividades");
+      document.getElementById("fFase").innerHTML='<option value="">Todas</option>';
+      render(); showToast("Excel cargado: "+acts.length+" actividades (modo local)");
     }catch(err){ showToast("Error al leer Excel"); console.error(err); }
   };
   rd.readAsArrayBuffer(file);
@@ -487,7 +515,6 @@ function exportarExcel(){
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"]=[{wch:32},{wch:50},{wch:14},{wch:34},{wch:12},{wch:13},{wch:14},{wch:11},{wch:24}];
-  // formato % en columna H (índice 7) desde fila 8
   for(let i=7;i<aoa.length;i++){ const ref=XLSX.utils.encode_cell({r:i,c:7}); if(ws[ref]){ws[ref].t="n";ws[ref].z="0%";} }
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Hoja1");
   const fecha=hoy().toISOString().slice(0,10);
@@ -495,9 +522,18 @@ function exportarExcel(){
   showToast("Excel descargado");
 }
 
-function restaurar(){ DATA=JSON.parse(JSON.stringify(DATA_ORIG)); document.getElementById("fFase").innerHTML='<option value="">Todas</option>'; document.getElementById("fEstado").value=""; document.getElementById("fTxt").value=""; render(); showToast("Datos originales restaurados"); }
+async function restaurar(){
+  document.getElementById("fFase").innerHTML='<option value="">Todas</option>';
+  document.getElementById("fEstado").value=""; document.getElementById("fTxt").value="";
+  if(SB_ON){
+    try{ await cargarDesdeSupabase(); setBadge("on","🟢 Conectado a Supabase"); render(); showToast("Datos recargados desde Supabase"); }
+    catch(e){ showToast("Error al recargar desde Supabase"); }
+  }else{
+    DATA=JSON.parse(JSON.stringify(DATA_ORIG)); render(); showToast("Datos originales restaurados");
+  }
+}
 
-render();
+init();
 </script>
 </body>
 </html>
